@@ -4,10 +4,6 @@ src/**
 .git/
 
 .env*
-.env.example  # Optional - include if you want it in npm package
-
-
-README.md       # Keep this if you want it shown on npmjs.com
 CHANGELOG.md
 
 .github/
