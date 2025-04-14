@@ -1,6 +1,6 @@
 {
   "name": "ipl-ticket-watcher",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "IPL ticket watcher (RCB-optimized) - Notifies when tickets go live",
   "main": "src/index.js",
   "exports": {
