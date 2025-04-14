@@ -3,6 +3,11 @@
   "version": "1.0.2",
   "description": "IPL ticket watcher (RCB-optimized) - Notifies when tickets go live",
   "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "types": "types/index.d.ts",
   "scripts": {
     "start": "node src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"

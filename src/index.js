@@ -1,85 +1,116 @@
+const EventEmitter = require('events');
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { Webhook, MessageBuilder } = require('discord-webhook-node');
 
-dotenv.config();
+class TicketWatcher extends EventEmitter {
+  constructor(config = {}) {
+    super();
+    this.config = {
+      watchInterval: config.watchInterval || parseInt(process.env.WATCH_INTERVAL_MIN || '5') * 60 * 1000,
+      matchDates: config.matchDates || process.env.MATCH_DATES?.split(',') || [],
+      ticketUrl: config.ticketUrl || 'https://shop.royalchallengers.com/ticket',
+      discordWebhook: config.discordWebhook || process.env.DISCORD_WEBHOOK_URL,
+      emailConfig: config.emailConfig || {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+        receiver: process.env.EMAIL_RECEIVER
+      }
+    };
 
-
-const WATCH_INTERVAL = parseInt(process.env.WATCH_INTERVAL_MIN || '5') * 60 * 1000;
-const MATCH_DATES = process.env.MATCH_DATES?.split(',') || [];
-const RCB_TICKET_URL = 'https://shop.royalchallengers.com/ticket'; // you can customise it for your own team
-const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-const hook = DISCORD_WEBHOOK_URL ? new Webhook(DISCORD_WEBHOOK_URL) : null;
-
-async function sendEmail(subject, text) {
-  await transporter.sendMail({
-    from: `RCB Ticket Notifier <${process.env.EMAIL_USER}>`,
-    to: process.env.EMAIL_RECEIVER,
-    subject,
-    text,
-  });
-}
-
-async function sendDiscordNotification(message) {
-  if (!hook) return;
-  
-  const embed = new MessageBuilder()
-    .setTitle('🚨 RCB Tickets Alert!')
-    .setDescription(message)
-    .setURL(RCB_TICKET_URL)
-    .setColor('#FF0000')
-    .setTimestamp();
-  
-  await hook.send(embed);
-}
-
-async function checkForTickets() {
-  try {
-    const { data: html } = await axios.get(RCB_TICKET_URL);
-    const $ = cheerio.load(html);
-    const dateElements = $('p.css-1nm99ps');
-
-    const availableDates = [];
-    dateElements.each((_, elem) => {
-      availableDates.push($(elem).text().trim());
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: this.config.emailConfig.user,
+        pass: this.config.emailConfig.pass,
+      },
     });
 
-    const matched = availableDates.filter(date => {
-      return MATCH_DATES.some(match => 
-        date.toLowerCase().includes(match.toLowerCase())
-    });
+    this.hook = this.config.discordWebhook ? new Webhook(this.config.discordWebhook) : null;
+  }
 
-    if (matched.length > 0) {
-      const msg = `🚨 Tickets available for: ${matched.join(', ')}\n\nBook here: ${RCB_TICKET_URL}`;
-      console.log(msg);
-      
-      await Promise.all([
-        sendEmail('🚨 RCB Tickets LIVE!', msg),
-        sendDiscordNotification(msg)
-      ]);
-    } else {
-      console.log(`[${new Date().toLocaleTimeString()}] Tickets not yet available.`);
+  async sendEmail(subject, text) {
+    await this.transporter.sendMail({
+      from: `RCB Ticket Notifier <${this.config.emailConfig.user}>`,
+      to: this.config.emailConfig.receiver,
+      subject,
+      text,
+    });
+  }
+
+  async sendDiscordNotification(message) {
+    if (!this.hook) return;
+    
+    const embed = new MessageBuilder()
+      .setTitle('🚨 RCB Tickets Alert!')
+      .setDescription(message)
+      .setURL(this.config.ticketUrl)
+      .setColor('#FF0000')
+      .setTimestamp();
+    
+    await this.hook.send(embed);
+  }
+
+  async checkForTickets() {
+    try {
+      const { data: html } = await axios.get(this.config.ticketUrl);
+      const $ = cheerio.load(html);
+      const dateElements = $('p.css-1nm99ps');
+
+      const availableDates = [];
+      dateElements.each((_, elem) => {
+        availableDates.push($(elem).text().trim());
+      });
+
+      const matched = availableDates.filter(date => {
+        return this.config.matchDates.some(match => 
+          date.toLowerCase().includes(match.toLowerCase())
+        );
+      });
+
+      if (matched.length > 0) {
+        const msg = `🚨 Tickets available for: ${matched.join(', ')}\n\nBook here: ${this.config.ticketUrl}`;
+        this.emit('ticketsAvailable', { dates: matched, message: msg });
+        
+        await Promise.all([
+          this.sendEmail('🚨 RCB Tickets LIVE!', msg),
+          this.sendDiscordNotification(msg)
+        ]);
+      } else {
+        this.emit('noTickets', { time: new Date() });
+      }
+      return matched;
+    } catch (error) {
+      this.emit('error', error);
+      throw error;
     }
-  } catch (error) {
-    console.error('Error checking tickets:', error);
+  }
+
+  start() {
+    this.emit('start');
+    this.checkForTickets();
+    this.interval = setInterval(() => this.checkForTickets(), this.config.watchInterval);
+    return this;
+  }
+
+  stop() {
+    clearInterval(this.interval);
+    this.emit('stop');
+    return this;
   }
 }
 
-function startWatcher() {
-  console.log('🔁 Starting RCB ticket watch...');
-  checkForTickets();
-  setInterval(checkForTickets, WATCH_INTERVAL);
+// Maintain CLI functionality
+if (require.main === module) {
+  dotenv.config();
+  const watcher = new TicketWatcher();
+  watcher
+    .on('ticketsAvailable', ({message}) => console.log(message))
+    .on('noTickets', ({time}) => console.log(`[${time.toLocaleTimeString()}] Tickets not yet available.`))
+    .on('error', console.error)
+    .start();
 }
 
-startWatcher();
+module.exports = TicketWatcher;
