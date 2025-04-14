@@ -1,15 +1,16 @@
 {
   "name": "ipl-ticket-watcher",
-  "version": "1.0.0",
-  "description": "Watches IPL (default RCB) ticket availability and notifies via email/Discord",
+  "version": "1.0.1",
+  "description": "IPL ticket watcher (RCB-optimized) - Notifies when tickets go live",
   "main": "src/index.js",
-  "bin": {
-    "rcb-ticket-watcher": "src/index.js"
-  },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["rcb", "ipl", "cricket", "tickets", "notifications"],
+  "bin": {
+    "ipl-ticket-watcher": "src/index.js"
+  },
+  "keywords": ["ipl", "rcb", "cricket", "tickets"],
   "author": "YourName",
   "license": "MIT",
   "dependencies": {
@@ -19,7 +20,12 @@
     "dotenv": "^16.3.1",
     "nodemailer": "^6.9.1"
   },
-  "engines": {
-    "node": ">=16.0.0"
-  }
+   "repository": {
+    "type": "git",
+    "url": "https://github.com/anirudhf/ipl-ticket-watcher.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anirudhf/ipl-ticket-watcher/issues"
+  },
+  "homepage": "https://github.com/anirudhf/ipl-ticket-watcher#readme"
 }
